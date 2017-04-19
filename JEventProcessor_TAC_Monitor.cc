@@ -130,14 +130,27 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 		}
 	}
 
-	if (tacDataCounter < 1)
+	if (tacDataCounter < 1) {
 		cout << "Too few TAC raw hits: " << tacDataCounter << endl;
+	}
 
-	if (tacDataCounter > 1)
+	if (tacDataCounter > 1) {
 		cout << "Too many TAC raw hits: " << tacDataCounter << endl;
+	}
 	// Only analyze events with a single hit in the FADC
 	if (tacDataCounter != 1)
 		return NOERROR;
+
+	// Fill the waveform histograms
+	int binNumber = 0;
+	for (auto& rawDataValue : tacRawData->samples) {
+		binNumber++;
+		unsigned tacBit = 0xFFFF;
+		histoMap["TACFADCRAW"][tacBit]->SetBinContent( binNumber, rawDataValue );
+		histoMap["TACFADCRAW_ENTRIES"][tacBit]->SetBinContent( binNumber,  histoMap["TACFADCRAW_ENTRIES"][tacBit]->GetBinContent(binNumber) + 1.0 );
+		histoMap["TACFADCRAW_SUM"][tacBit]->SetBinContent( binNumber,  histoMap["TACFADCRAW_SUM"][tacBit]->GetBinContent(binNumber) + rawDataValue );
+		histoMap["TACFADCRAW_AVG"][tacBit]->Divide( histoMap["TACFADCRAW_SUM"][tacBit], histoMap["TACFADCRAW_ENTRIES"][tacBit], 1, 1 );
+	}
 
 	std::vector<const Df250PulsePedestal*> pulsePedestals;
 	tacRawData->Get(pulsePedestals);
@@ -164,10 +177,10 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 	if (currentMaxValue > maxPulseValue)
 		currentMaxValue = overflowPulseValue;
 	{
-		stringstream histoName;
-		histoName << "TACMax" << trigBits;
+		stringstream histKey;
+		histKey << "TACMax";
 		japp->RootFillLock(this);
-		histoMap[histoName.str()][trigBits]->Fill(currentMaxValue);
+		histoMap[histKey.str()][trigBits]->Fill(currentMaxValue);
 		japp->RootFillUnLock(this);
 	}
 	return NOERROR;
@@ -187,10 +200,10 @@ jerror_t JEventProcessor_TAC_Monitor::fillPulseDataHitograms(
 			double pulsePeak = tacDigiHit->getPulsePeak();
 			if (pulsePeak > maxPulseValue)
 				pulsePeak = overflowPulseValue;
-			stringstream histoName;
-			histoName << "TACAmp" << trigBits;
+			stringstream histKey;
+			histKey << "TACAmp";
 			japp->RootFillLock(this);
-			histoMap[histoName.str()][trigBits]->Fill(pulsePeak);
+			histoMap[histKey.str()][trigBits]->Fill(pulsePeak);
 			japp->RootFillUnLock(this);
 		}
 	}
@@ -214,49 +227,85 @@ void JEventProcessor_TAC_Monitor::createHistograms() {
 
 	// Create TAC FADc raw data
 	{
+		stringstream histKey;
 		stringstream histName;
 		stringstream histTitle;
 		unsigned trigBit = 0xFFFF;
-		histName << "TACFADCRAW";
+		histKey << "TACFADCRAW";
+		histName << histKey.str();
 		histTitle << "TAC FADC waveform " ;
 		if( histoMap.count( histName.str() ) == 0 ) histoMap[histName.str()] = map<unsigned, TH1*>();
-		histoMap[histName.str()][trigBit] = new TH1F( histName.str().c_str(), histTitle.str().c_str(), 100, 0., 100. );
-		histoMap[histName.str()][trigBit]->SetTitle( "FlashADC sample number [#]" );
+		histoMap[histKey.str()][trigBit] = new TH1F( histName.str().c_str(), histTitle.str().c_str(), 100, 0., 100. );
+		histoMap[histKey.str()][trigBit]->GetXaxis()->SetTitle( "FlashADC sample number [#]" );
 	}
-	// Create TAC averaged FADc raw data
+	// Create TAC summed FADc raw data
 	{
+		stringstream histKey;
 		stringstream histName;
 		stringstream histTitle;
 		unsigned trigBit = 0xFFFF;
-		histName << "TACFADCRAW_avg";
-		histTitle << "Averaged TAC FADC waveform" ;
+		histKey << "TACFADCRAW_SUM";
+		histName << histKey.str();
+		histTitle << "Summed TAC FADC waveform" ;
 		if( histoMap.count( histName.str() ) == 0 ) histoMap[histName.str()] = map<unsigned, TH1*>();
-		histoMap[histName.str()][trigBit] = new TH1F( histName.str().c_str(), histTitle.str().c_str(), 100, 0., 100. );
-		histoMap[histName.str()][trigBit]->SetTitle( "FlashADC sample number [#]" );
+		histoMap[histKey.str()][trigBit] = new TH1F( histName.str().c_str(), histTitle.str().c_str(), 100, 0., 100. );
+		histoMap[histKey.str()][trigBit]->GetXaxis()->SetTitle( "FlashADC sample number [#]" );
 	}
-	// Create TAC amplitude histos
-	for (unsigned trigBit = 0; trigBit < 16; trigBit++) {
+	// Create TAC FADc raw data for entries
+	{
+		stringstream histKey;
 		stringstream histName;
 		stringstream histTitle;
-		histName << "TACAmp" << trigBit;
+		unsigned trigBit = 0xFFFF;
+		histKey << "TACFADCRAW_ENTRIES";
+		histName << histKey.str();
+		histTitle << "Entries in TAC FADC waveform" ;
+		if( histoMap.count( histName.str() ) == 0 ) histoMap[histName.str()] = map<unsigned, TH1*>();
+		histoMap[histKey.str()][trigBit] = new TH1F( histName.str().c_str(), histTitle.str().c_str(), 100, 0., 100. );
+		histoMap[histKey.str()][trigBit]->GetXaxis()->SetTitle( "FlashADC sample number [#]" );
+	}
+
+	// Create TAC averaged FADc raw data
+	{
+		stringstream histKey;
+		stringstream histName;
+		stringstream histTitle;
+		unsigned trigBit = 0xFFFF;
+		histKey << "TACFADCRAW_AVG";
+		histName << histKey.str();
+		histTitle << "Averaged TAC FADC waveform" ;
+		if( histoMap.count( histName.str() ) == 0 ) histoMap[histName.str()] = map<unsigned, TH1*>();
+		histoMap[histKey.str()][trigBit] = new TH1F( histName.str().c_str(), histTitle.str().c_str(), 100, 0., 100. );
+		histoMap[histKey.str()][trigBit]->GetXaxis()->SetTitle( "FlashADC sample number [#]" );
+	}
+
+	// Create TAC amplitude histos
+	for (unsigned trigBit = 0; trigBit < 16; trigBit++) {
+		stringstream histKey;
+		stringstream histName;
+		stringstream histTitle;
+		histKey << "TACAmp";
+		histName << histKey.str() << trigBit;
 		histTitle << "TAC Signal Amplitude for Trigger " << trigBit;
 		cout << "Reserving histo with name " <<  histName.str() << " and trigger bit " << trigBit << endl;
 		if( histoMap.count( histName.str() ) == 0 ) histoMap[histName.str()] = map<unsigned, TH1*>();
-		histoMap[histName.str()][trigBit] = new TH1D(histName.str().c_str(),
+		histoMap[histKey.str()][trigBit] = new TH1D(histName.str().c_str(),
 				histTitle.str().c_str(), 500, 0., 5000.);
-		histoMap[histName.str()][trigBit]->GetXaxis()->SetTitle("TAC Amplitude");
+		histoMap[histKey.str()][trigBit]->GetXaxis()->SetTitle("TAC Amplitude");
 	}
-	// Create TAC amplitude histos for goibng through the data and picking the highest bin
+	// Create TAC amplitude histos for going through the data and picking the highest bin
 	for (unsigned trigBit = 0; trigBit < 16; trigBit++) {
+		stringstream histKey;
 		stringstream histName;
 		stringstream histTitle;
-		histName << "TACMax" << trigBit;
+		histKey << "TACMax";
+		histName << histKey.str() << trigBit;
 		histTitle << "TAC Signal Maximum from Raw for Trigger " << trigBit;
 		cout << "Reserving histo with name " <<  histName.str() << " and trigger bit " << trigBit << endl;
 		if( histoMap.count( histName.str() ) == 0 ) histoMap[histName.str()] = map<unsigned, TH1*>();
-		histoMap[histName.str()][trigBit] = new TH1D(histName.str().c_str(),
+		histoMap[histKey.str()][trigBit] = new TH1D(histName.str().c_str(),
 				histTitle.str().c_str(), 500, 0., 5000.);
-		histoMap[histName.str()][trigBit]->GetXaxis()->SetTitle("TAC Amplitude");
+		histoMap[histKey.str()][trigBit]->GetXaxis()->SetTitle("TAC Amplitude");
 	}
 
 	japp->RootUnLock();
