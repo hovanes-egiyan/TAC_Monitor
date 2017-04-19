@@ -1,0 +1,1 @@
+hd_ana -PNTHREADS=1 -PEVIO:NTHREADS=1 -PPLUGINS="TAC_Monitor" -PTHREAD_TIMEOUT=500 -PJANA:MAX_RELAUNCH_THREADS=1 /home/hovanes/GlueX/offline/gluex_top/tac_analysis/hd_rawdata_010852_000.evio
