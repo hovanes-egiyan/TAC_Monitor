@@ -20,7 +20,7 @@ public:
 	//! Construct and lock mutex
 	ReadLock(pthread_rwlock_t& m) :
 			m_(m) {
-		pthread_rwlock_wrlock(&m_);
+		pthread_rwlock_rdlock(&m_);
 	}
 	//! Destruct and unlock mutex
 	virtual ~ReadLock() {
@@ -28,7 +28,7 @@ public:
 	}
 	//! Explicitly lock mutex, need to make sure you do not get into racing condition
 	virtual int lock() {
-		return pthread_rwlock_wrlock(&m_);
+		return pthread_rwlock_rdlock(&m_);
 	}
 	//! Explicitly unlock existing mutex
 	virtual int unlock() {
