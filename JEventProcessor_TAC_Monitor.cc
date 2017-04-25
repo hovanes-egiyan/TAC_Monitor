@@ -31,6 +31,8 @@
 #include <TAC/DTACDigiHit.h>
 #include <TAC/DTACHit.h>
 
+//#include "libRootSpy/DRootSpy.h"
+
 #include "ReadWriteLock.h"
 #include "JEventProcessor_TAC_Monitor.h"
 
@@ -42,6 +44,17 @@ extern "C" {
 void InitPlugin(JApplication *app) {
 	InitJANAPlugin(app);
 	app->AddProcessor(new JEventProcessor_TAC_Monitor());
+	// Force RootSpy lock to be set to the global RootReadWrite lock the moment this
+	// plugin is loaded and this init function is called, unless it is non-zero.
+	// This will interfere with all other plugins that use DRootSpy class object without
+	// actual locking RootSpy plugin.
+//	if (gROOTSPY_RW_LOCK == nullptr) {
+//		if (dynamic_cast<DApplication*>(japp)) {
+//			gROOTSPY_RW_LOCK =
+//					dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock();
+//			gROOTSPY->Initialize( (dynamic_cast<DApplication*>(japp))->GetRootReadWriteLock(), "<default>");
+//		}
+//	}
 }
 }
 
@@ -88,6 +101,11 @@ jerror_t JEventProcessor_TAC_Monitor::evnt(jana::JEventLoop* eventLoop,
 	// japp->RootWriteLock();
 	//  ... fill historgrams or trees ...
 	// japp->RootUnLock();
+
+
+	// do not do anything if the application is not DApplication
+	if( dynamic_cast<DApplication*>(japp) == nullptr )
+		return NOERROR;
 
 	// Get First Trigger Type
 	const DL1Trigger *trigWords = nullptr;

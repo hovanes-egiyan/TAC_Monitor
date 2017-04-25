@@ -118,7 +118,7 @@ sbms.ApplyPlatformSpecificSettings(env, osname)
 # Make plugin from source in this directory
 sbms.AddDANA(env)
 sbms.AddROOT(env)
-
+#sbms.AddROOTSpy(env)
 sbms.AddROOTSpyMacros(env, )
 sbms.plugin(env, )
 
