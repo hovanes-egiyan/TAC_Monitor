@@ -44,6 +44,15 @@ protected:
 	// Value that assigned to the peak in cases of overlfow
 	static unsigned overflowPulseValue;
 
+	// Timing cut value between the TAGH and TAC coincidence
+	static double timeCutValue_TAGH;
+	// Timing cut width between the TAGH and TAC coincidence
+	static double timeCutWidth_TAGH;
+
+	// Timing cut value between the TAGH and TAC coincidence
+	static double timeCutValue_TAGM;
+	// Timing cut width between the TAGH and TAC coincidence
+	static double timeCutWidth_TAGM;
 
 	virtual jerror_t init(void);          ///< Called once at program start.
 	virtual jerror_t brun(jana::JEventLoop *eventLoop, int32_t runNumber);          ///< Called everytime a new run number is detected.
@@ -55,12 +64,24 @@ protected:
 	// Method where the histograms are created
 	virtual void createHistograms();
 	// Fill raw data histograms (the ones related to waveforms
-	virtual jerror_t fillRawDataHistograms( jana::JEventLoop* eventLoop, uint32_t trigBits );
+	virtual jerror_t fillRawDataHistograms(jana::JEventLoop* eventLoop,
+			uint32_t trigBits);
 	// Fill pulse data histograms
-	virtual jerror_t fillPulseDataHitograms( jana::JEventLoop* eventLoop, uint32_t trigBits );
+	virtual jerror_t fillPulseDataHitograms(jana::JEventLoop* eventLoop,
+			uint32_t trigBits);
 
-//	// Write histograms into the file
-//	virtual jerror_t writeHistograms();
+	template<typename TH1_TYPE>
+	jerror_t createHisto(unsigned trigBit, std::string key,
+			std::string titlePrefix, std::string xTitle, int nBins, double xMin,
+			double xMax);
+	template<typename TH2_TYPE>
+	jerror_t createHisto(unsigned trigBit,
+			std::string histKey, std::string xTitlePrefix, std::string xTitle,
+			std::string yTitle, int nBinsX, double xMin, double xMax,
+			int nBinsY, double yMin, double yMax);
+
+	// Write histograms into the file
+	virtual jerror_t writeHistograms();
 
 
 	// Check if the trigger bits for the event are useful
