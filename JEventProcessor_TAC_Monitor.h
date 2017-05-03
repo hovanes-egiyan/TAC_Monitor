@@ -11,6 +11,8 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#include <iterator>
+#include <algorithm>
 
 #include <TH1.h>
 
@@ -54,6 +56,9 @@ protected:
 	// Timing cut width between the TAGH and TAC coincidence
 	static double timeCutWidth_TAGM;
 
+	// Threshold that will define when the TAC hist occured
+	static unsigned tacThreshold;
+
 	virtual jerror_t init(void);          ///< Called once at program start.
 	virtual jerror_t brun(jana::JEventLoop *eventLoop, int32_t runNumber);          ///< Called everytime a new run number is detected.
 	virtual jerror_t evnt(jana::JEventLoop *eventLoop, uint64_t eventNumber);          ///< Called every event.
@@ -69,6 +74,17 @@ protected:
 	// Fill pulse data histograms
 	virtual jerror_t fillPulseDataHitograms(jana::JEventLoop* eventLoop,
 			uint32_t trigBits);
+	// Fill tagger related histos
+	template<typename DATA_TYPE, typename CounterID, typename TIME_CUT>
+	jerror_t fillTaggerRelatedHistograms(
+			std::vector<const DATA_TYPE*>& digiHitVector, uint32_t trigBits,
+			std::string detComp, std::string tacMethod, double tacPeak,
+			double tacTime, CounterID idFunctor, TIME_CUT timeCut);
+
+	// Return a pair giving the peak location (first) and the peak value (second)
+	virtual std::pair<unsigned,unsigned> getPeakLocationAndValue( const Df250WindowRawData* data );
+	// Return the time where the signal crosses the threshold
+	virtual unsigned getPulseTime( const Df250WindowRawData* data, unsigned threshold );
 
 	template<typename TH1_TYPE>
 	jerror_t createHisto(unsigned trigBit, std::string key,
