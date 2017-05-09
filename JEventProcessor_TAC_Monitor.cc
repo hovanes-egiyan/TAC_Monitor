@@ -27,11 +27,17 @@
 #include <DAQ/Df250PulseIntegral.h>
 #include <DAQ/Df250PulseData.h>
 #include <DAQ/Df250WindowRawData.h>
+#include <DAQ/DF1TDCHit.h>
+
 #include <DAQ/DEPICSvalue.h>
 #include <TAC/DTACDigiHit.h>
+#include <TAC/DTACTDCDigiHit.h>
 #include <TAC/DTACHit.h>
 #include <TAGGER/DTAGHDigiHit.h>
+#include <TAGGER/DTAGHTDCDigiHit.h>
 #include <TAGGER/DTAGMDigiHit.h>
+#include <TAGGER/DTAGMTDCDigiHit.h>
+#include <TTAB/DTTabUtilities.h>
 
 //#include "libRootSpy/DRootSpy.h"
 
@@ -75,8 +81,14 @@ double JEventProcessor_TAC_Monitor::timeCutWidth_TAGM = 20;
 // Threshold that will define when the TAC hit occurred
 unsigned JEventProcessor_TAC_Monitor::tacThreshold = 200;
 
+// Time units for the timing from the Digi bank
+double JEventProcessor_TAC_Monitor::fadc250DigiTimeScale = (1./16.0);
+// Time units for the timing from raw FADC
+double JEventProcessor_TAC_Monitor::fadc250RawTimeScale = 4.0;
+
+
 jerror_t JEventProcessor_TAC_Monitor::init(void) {
-	WriteLock rootRWLock(
+	volatile WriteLock rootRWLock(
 			*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
 	TDirectory *mainDir = gDirectory;
 	rootDir = gDirectory->mkdir("TAC");
@@ -126,16 +138,16 @@ jerror_t JEventProcessor_TAC_Monitor::evnt(jana::JEventLoop* eventLoop,
 		return NOERROR;
 	uint32_t usefulTriggerBits = triggerMask & trigWords->trig_mask;
 
+	// Here we fill the raw waveforms
 	for (unsigned trigBit = 0; trigBit < numberOfTriggerBits; trigBit++) {
 		unsigned singleBit = 1 << trigBit;
 		if ((singleBit & usefulTriggerBits) != 0) {
 			this->fillRawDataHistograms(eventLoop, trigBit);
 			this->fillPulseDataHitograms(eventLoop, trigBit);
+			this->fillTDCHistograms(eventLoop, trigBit);
 		}
 	}
-
-//	const Df250WindowRawData* TACRaw = NULL;
-
+	// Write histograms into ROOT file once in a while
 	if( eventNumber % 200000 == 0 ) {
 		this->writeHistograms();
 	}
@@ -143,6 +155,7 @@ jerror_t JEventProcessor_TAC_Monitor::evnt(jana::JEventLoop* eventLoop,
 	return NOERROR;
 }
 
+// Handle histograms with FADC250 raw data
 jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 		jana::JEventLoop* eventLoop, uint32_t trigBit) {
 	vector<const Df250WindowRawData*> rawDataVector;
@@ -152,12 +165,38 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 	// Pick the TAC raw data
 	const Df250WindowRawData* tacRawData = nullptr;
 	for (auto& rawData : rawDataVector) {
-		if (rawData->rocid == 14 && rawData->slot == 20
-				&& rawData->channel == 0) {
-			tacRawData = rawData;
-			tacDataCounter++;
+		if (rawData) {
+			// Hard-coded the location of the TAC FADC signal, pick the TAC raw data
+			if (rawData->rocid == 14 && rawData->slot == 20
+					&& rawData->channel == 0) {
+				tacRawData = rawData;
+				tacDataCounter++;
+			}
 		}
 	}
+
+	unsigned tacTDCDataCounter = 0;
+	vector<const DCAEN1290TDCHit*> rawTDCDataVector;
+	eventLoop->Get(rawTDCDataVector);
+//	if( rawTDCDataVector.size() > 0 )
+//		cout << "Found some CAEN TDC data " << endl;
+
+	const DDAQAddress* tacTDCRawData = nullptr;
+	for (auto& rawTDCData : rawTDCDataVector) {
+		if (rawTDCData) {
+//			cout << rawTDCData->rocid << " , " << rawTDCData->slot << "  , " << rawTDCData->channel << endl;
+			// Hard-coded the location of the TAC FADC signal, pick the TAC raw data
+			if (rawTDCData->rocid == 78 && rawTDCData->slot == 8
+					&& rawTDCData->channel == 18) {
+				tacTDCRawData = rawTDCData;
+				tacTDCDataCounter++;
+				cout << "Found TAC TDC" << endl;
+			}
+		}
+	}
+	if( tacTDCDataCounter > 0 )
+		cout << "Found TAC TDC data " << endl;
+
 
 	if (tacDataCounter < 1) {
 		cout << "Too few TAC raw hits: " << tacDataCounter << endl;
@@ -172,7 +211,7 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 
 	// Fill the waveform histograms
 	{
-		WriteLock rootRWLock(
+		volatile WriteLock rootRWLock(
 				*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
 		int binNumber = 0;
 		for (auto& rawDataValue : tacRawData->samples) {
@@ -194,48 +233,38 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 				histoMap["TACFADCRAW_ENTRIES"][trigBit], 1, 1);
 	}
 
-//	std::vector<const Df250PulsePedestal*> pulsePedestals;
-//	tacRawData->Get(pulsePedestals);
-//	if (pulsePedestals.size() > 1)
-//		return NOERROR;
-//
-//	std::vector<const Df250PulseIntegral*> pulseIntegral;
-//	tacRawData->Get(pulseIntegral);
-//	if (pulseIntegral.size() > 1)
-//		return NOERROR;
-//
-//	std::vector<const Df250PulseData*> pulseData;
-//	tacRawData->Get(pulseData);
-//	if (pulseData.size() > 1)
-//		return NOERROR;
-
 	// Find the maximum by going through the raw data and comparing samples
 	pair<unsigned, unsigned> maxInfoPair = this->getPeakLocationAndValue(
 			tacRawData);
 	double maxValue = maxInfoPair.second;
+	// Find the TAC signal time by finding the bin where the signal is above threshold
 	double tacPeakTime = this->getPulseTime( tacRawData, tacThreshold );
+	// Assign a bigger values for cases with overflows
 	if (maxValue >= maxPulseValue)
 		maxValue = overflowPulseValue;
 	{
-		WriteLock rootRWLock(
+		volatile WriteLock rootRWLock(
 				*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
 		histoMap["TACAmpWAVE"][trigBit]->Fill(maxValue);
-		histoMap["TACTimeWAVE"][trigBit]->Fill(tacPeakTime*4.0);
+		histoMap["TACTimeWAVE"][trigBit]->Fill(tacPeakTime*fadc250RawTimeScale);
 	}
+
+	// Call methods to fill tagger (TAGH and TAGM) related histograms
 	vector<const DTAGHDigiHit*> taghDigiHitVector;
 	eventLoop->Get(taghDigiHitVector);
 	fillTaggerRelatedHistograms(taghDigiHitVector, trigBit, "TAGH", "WAVE", maxValue,
 			tacPeakTime, [&]( const DTAGHDigiHit* hit ) {return hit->counter_id;},
-			[&](const DTAGHDigiHit* hit ) -> bool {return fabs( hit->pulse_time/16.0 - timeCutValue_TAGH ) < timeCutWidth_TAGH;});
+			[&](const DTAGHDigiHit* hit ) -> bool {return fabs( hit->pulse_time*fadc250DigiTimeScale - timeCutValue_TAGH ) < timeCutWidth_TAGH;});
 	vector<const DTAGMDigiHit*> tagmDigiHitVector;
 	eventLoop->Get(tagmDigiHitVector);
 	fillTaggerRelatedHistograms(tagmDigiHitVector, trigBit, "TAGM", "WAVE", maxValue,
 			tacPeakTime, [&]( const DTAGMDigiHit* hit ) {return hit->column;},
-			[&](const DTAGMDigiHit* hit ) -> bool {return fabs( hit->pulse_time/16.0 - timeCutValue_TAGM ) < timeCutWidth_TAGM;});
+			[&](const DTAGMDigiHit* hit ) -> bool {return fabs( hit->pulse_time*fadc250DigiTimeScale - timeCutValue_TAGM ) < timeCutWidth_TAGM;});
 
 	return NOERROR;
 }
 
+// Handle histogram from FADC250 pulse data
 jerror_t JEventProcessor_TAC_Monitor::fillPulseDataHitograms(
 		jana::JEventLoop* eventLoop, uint32_t trigBit) {
 	vector<const DTACDigiHit*> tacDigiHitVector;
@@ -244,37 +273,70 @@ jerror_t JEventProcessor_TAC_Monitor::fillPulseDataHitograms(
 	// Pick the only peak value from the TACDigiHit object
 	double pulsePeak = 0;
 	double pulseTime = 0;
-	histoMap["TAC_NHITS"][trigBit]->Fill(tacDigiHitVector.size());
-
+	{
+		volatile WriteLock rootRWLock(
+				*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
+		histoMap["TAC_NHITS"][trigBit]->Fill(tacDigiHitVector.size());
+	}
+	// Find the digi hit with the largest pulse and use its height and time
 	for (auto tacDigiHit : tacDigiHitVector) {
-		double currentPeak = double(tacDigiHit->getPulsePeak());
-		if( currentPeak > pulsePeak ) {
-			pulsePeak = currentPeak;
-			pulseTime = double(tacDigiHit->getPulseTime()) / 16.0;
+		if (tacDigiHit) {
+			double currentPeak = double(tacDigiHit->getPulsePeak());
+			if (currentPeak > pulsePeak) {
+				pulsePeak = currentPeak;
+				pulseTime = double(tacDigiHit->getPulseTime())
+						* fadc250DigiTimeScale;
+			}
 		}
 	}
-		if (pulsePeak >= maxPulseValue)
-			pulsePeak = overflowPulseValue;
-		WriteLock rootRWLock(
+	// Assign larger value when overflow is detected in FADC
+	if (pulsePeak >= maxPulseValue)
+		pulsePeak = overflowPulseValue;
+	{
+		volatile WriteLock rootRWLock(
 				*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
 		histoMap["TACAmpPULSE"][trigBit]->Fill(pulsePeak);
 		histoMap["TACTimePULSE"][trigBit]->Fill(pulseTime);
+	}
+	vector<const DTAGHDigiHit*> taghDigiHitVector;
+	eventLoop->Get(taghDigiHitVector);
+	fillTaggerRelatedHistograms(taghDigiHitVector, trigBit, "TAGH", "PULSE",
+			pulsePeak, pulseTime,
+			[&]( const DTAGHDigiHit* hit ) {return hit->counter_id;},
+			[&](const DTAGHDigiHit* hit ) -> bool {return fabs( hit->pulse_time*fadc250DigiTimeScale - timeCutValue_TAGH ) < timeCutWidth_TAGH;});
 
-		vector<const DTAGHDigiHit*> taghDigiHitVector;
-		eventLoop->Get(taghDigiHitVector);
-		fillTaggerRelatedHistograms(taghDigiHitVector, trigBit, "TAGH", "PULSE",
-				pulsePeak, pulseTime,
-				[&]( const DTAGHDigiHit* hit ) {return hit->counter_id;},
-				[&](const DTAGHDigiHit* hit ) -> bool {return fabs( hit->pulse_time/16.0 - timeCutValue_TAGH ) < timeCutWidth_TAGH;});
-
-		vector<const DTAGMDigiHit*> tagmDigiHitVector;
-		eventLoop->Get(tagmDigiHitVector);
-		fillTaggerRelatedHistograms(tagmDigiHitVector, trigBit, "TAGM", "PULSE",
-				pulsePeak, pulseTime,
-				[&]( const DTAGMDigiHit* hit ) {return hit->column;},
-				[&](const DTAGMDigiHit* hit ) -> bool {return fabs( hit->pulse_time/16.0 - timeCutValue_TAGM ) < timeCutWidth_TAGM;});
+	vector<const DTAGMDigiHit*> tagmDigiHitVector;
+	eventLoop->Get(tagmDigiHitVector);
+	fillTaggerRelatedHistograms(tagmDigiHitVector, trigBit, "TAGM", "PULSE",
+			pulsePeak, pulseTime,
+			[&]( const DTAGMDigiHit* hit ) {return hit->column;},
+			[&](const DTAGMDigiHit* hit ) -> bool {return fabs( hit->pulse_time*fadc250DigiTimeScale - timeCutValue_TAGM ) < timeCutWidth_TAGM;});
 	return NOERROR;
 }
+
+
+jerror_t JEventProcessor_TAC_Monitor::fillTDCHistograms(
+		jana::JEventLoop* eventLoop, uint32_t trigBit) {
+	vector<const DTACTDCDigiHit*> tacTDCDigiHits;
+	eventLoop->Get(tacTDCDigiHits);
+
+	const DTTabUtilities* ttabUtilities = nullptr;
+	eventLoop->GetSingle(ttabUtilities);
+
+	for (auto& tacTDCDigiHit : tacTDCDigiHits) {
+		if (tacTDCDigiHit) {
+			const DF1TDCHit* tacF1RawHit = nullptr;
+			tacTDCDigiHit->GetSingleT(tacF1RawHit);
+			if (tacTDCDigiHit) {
+				double tacTDCTime = ttabUtilities->Convert_DigiTimeToNs_F1TDC(
+						tacF1RawHit);
+				histoMap["TAC_TDCTIME"][trigBit]->Fill(double(tacTDCTime));
+			}
+		}
+	}
+	return NOERROR;
+}
+
 
 jerror_t JEventProcessor_TAC_Monitor::erun(void) {
 	this->writeHistograms();
@@ -320,8 +382,12 @@ void JEventProcessor_TAC_Monitor::createHistograms() {
 			// Create TAC number of hits histogram
 			createHisto<TH1D>(trigBit, "TAC_NHITS",
 					"Number of hits in TAC", "hit number [#]",
-					10, 0., 10.);
+					7, 0., 7.);
 
+			// Create TAC TDC hit time
+			createHisto<TH1D>(trigBit, "TAC_TDCTIME",
+					"TDC time in TAC", "TDC time [ns]",
+					500, 0., 500.);
 
 			// Create TAC amplitude histos
 			createHisto<TH1D>(trigBit, "TACAmpPULSE",
@@ -454,7 +520,7 @@ jerror_t JEventProcessor_TAC_Monitor::createHisto(unsigned trigBit,
 
 
 jerror_t JEventProcessor_TAC_Monitor::writeHistograms() {
-	WriteLock rootRWLock(
+	volatile WriteLock rootRWLock(
 			*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
 
 	TDirectory* oldDir = gDirectory;
@@ -506,26 +572,32 @@ inline unsigned JEventProcessor_TAC_Monitor::getPulseTime(
 	return 0;
 }
 
+// Fill Tagger-related histograms
 template<typename TAG_TYPE, typename CounterID, typename TIME_CUT>
 jerror_t JEventProcessor_TAC_Monitor::fillTaggerRelatedHistograms(
 		vector<const TAG_TYPE*>& digiHitVector, uint32_t trigBit,
 		string detComp, string tacMethod, double tacPeak, double tacTime,
 		CounterID idFunctor, TIME_CUT timeCut) {
 	for (auto digiHit : digiHitVector) {
-		double tagTime = double(digiHit->pulse_time) / 16.0;
-		double detID = idFunctor(digiHit);
-		bool match = timeCut(digiHit);
+		if (digiHit != nullptr) {
+			double tagTime = double(digiHit->pulse_time) * fadc250DigiTimeScale;
+			double detID = idFunctor(digiHit);
+			bool match = timeCut(digiHit);
 
-		histoMap[detComp + "_ID"][trigBit]->Fill(detID);
-		histoMap[detComp + "SigTime"][trigBit]->Fill(tagTime);
-		histoMap["TACTIME" + tacMethod + "vs" + detComp + "TIME"][trigBit]->Fill(
-				tagTime, tacTime);
-		histoMap[detComp + "TIMEvs" + detComp + "ID"][trigBit]->Fill(detID,
-				tagTime);
-		if (match) {
-			histoMap[detComp + "_ID_MATCHED" + tacMethod][trigBit]->Fill(detID);
-			histoMap["TACAMP" + tacMethod + "vs" + detComp + "ID"][trigBit]->Fill(
-					detID, tacPeak);
+			volatile WriteLock rootRWLock(
+					*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
+			histoMap[detComp + "_ID"][trigBit]->Fill(detID);
+			histoMap[detComp + "SigTime"][trigBit]->Fill(tagTime);
+			histoMap["TACTIME" + tacMethod + "vs" + detComp + "TIME"][trigBit]->Fill(
+					tagTime, tacTime);
+			histoMap[detComp + "TIMEvs" + detComp + "ID"][trigBit]->Fill(detID,
+					tagTime);
+			if (match) {
+				histoMap[detComp + "_ID_MATCHED" + tacMethod][trigBit]->Fill(
+						detID);
+				histoMap["TACAMP" + tacMethod + "vs" + detComp + "ID"][trigBit]->Fill(
+						detID, tacPeak);
+			}
 		}
 	}
 	return NOERROR;

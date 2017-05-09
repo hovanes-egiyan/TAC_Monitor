@@ -20,6 +20,7 @@
 #include <DANA/DApplication.h>
 #include "TRIGGER/DL1Trigger.h"
 
+
 class JEventProcessor_TAC_Monitor: public jana::JEventProcessor {
 protected:
 
@@ -56,8 +57,13 @@ protected:
 	// Timing cut width between the TAGH and TAC coincidence
 	static double timeCutWidth_TAGM;
 
-	// Threshold that will define when the TAC hist occured
+	// Threshold that will define when the TAC hit occurred
 	static unsigned tacThreshold;
+
+	// Time units for the timing from the Digi bank
+	static double fadc250DigiTimeScale;
+	// Time units for the timing from raw FADC
+	static double fadc250RawTimeScale;
 
 	virtual jerror_t init(void);          ///< Called once at program start.
 	virtual jerror_t brun(jana::JEventLoop *eventLoop, int32_t runNumber);          ///< Called everytime a new run number is detected.
@@ -65,19 +71,22 @@ protected:
 	virtual jerror_t erun(void);          ///< Called every time run number changes, provided brun has been called.
 	virtual jerror_t fini(void);          ///< Called after last event of last event source has been processed.
 
-
 	// Method where the histograms are created
 	virtual void createHistograms();
 	// Fill raw data histograms (the ones related to waveforms
 	virtual jerror_t fillRawDataHistograms(jana::JEventLoop* eventLoop,
-			uint32_t trigBits);
+			uint32_t trigBit);
 	// Fill pulse data histograms
 	virtual jerror_t fillPulseDataHitograms(jana::JEventLoop* eventLoop,
-			uint32_t trigBits);
+			uint32_t trigBit);
+
+	// Fill F1TDC related histograms
+	virtual jerror_t fillTDCHistograms( jana::JEventLoop* eventLoop, uint32_t trigBit );
+
 	// Fill tagger related histos
 	template<typename DATA_TYPE, typename CounterID, typename TIME_CUT>
 	jerror_t fillTaggerRelatedHistograms(
-			std::vector<const DATA_TYPE*>& digiHitVector, uint32_t trigBits,
+			std::vector<const DATA_TYPE*>& digiHitVector, uint32_t trigBit,
 			std::string detComp, std::string tacMethod, double tacPeak,
 			double tacTime, CounterID idFunctor, TIME_CUT timeCut);
 
