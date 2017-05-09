@@ -381,7 +381,7 @@ void JEventProcessor_TAC_Monitor::createHistograms() {
 
 			// Create TAC number of hits histogram
 			createHisto<TH1D>(trigBit, "TAC_NHITS",
-					"Number of hits in TAC", "hit number [#]",
+					"Number of hits in TAC", "number of hits from FADC FPGA [#]",
 					7, 0., 7.);
 
 			// Create TAC TDC hit time
