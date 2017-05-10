@@ -90,6 +90,16 @@ double JEventProcessor_TAC_Monitor::fadc250RawTimeScale = 4.0;
 jerror_t JEventProcessor_TAC_Monitor::init(void) {
 	volatile WriteLock rootRWLock(
 			*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
+
+	// Create parameters and assign values
+	gPARMS->SetDefaultParameter<string,double>( "TAC:TAGH_FADC_MEAN_TIME", timeCutValue_TAGH );
+	gPARMS->GetParameter( "TAC:TAGH_FADC_MEAN_TIME" )->GetValue( timeCutValue_TAGH );
+	gPARMS->SetDefaultParameter<string,double>( "TAC:TAGM_FADC_MEAN_TIME", timeCutValue_TAGM );
+	gPARMS->GetParameter( "TAC:TAGM_FADC_MEAN_TIME" )->GetValue( timeCutValue_TAGM );
+	gPARMS->SetDefaultParameter<string,unsigned>( "TAC:TAC_FADC_THRESHOLD", tacThreshold );
+	gPARMS->GetParameter( "TAC:TAC_FADC_THRESHOLD" )->GetValue( tacThreshold );
+
+	// Create TAC directory and the histograms
 	TDirectory *mainDir = gDirectory;
 	rootDir = gDirectory->mkdir("TAC");
 	rootDir->cd();
@@ -178,8 +188,6 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 	unsigned tacTDCDataCounter = 0;
 	vector<const DCAEN1290TDCHit*> rawTDCDataVector;
 	eventLoop->Get(rawTDCDataVector);
-//	if( rawTDCDataVector.size() > 0 )
-//		cout << "Found some CAEN TDC data " << endl;
 
 	const DDAQAddress* tacTDCRawData = nullptr;
 	for (auto& rawTDCData : rawTDCDataVector) {
@@ -190,12 +198,12 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 					&& rawTDCData->channel == 18) {
 				tacTDCRawData = rawTDCData;
 				tacTDCDataCounter++;
-				cout << "Found TAC TDC" << endl;
+//				cout << "Found TAC TDC" << endl;
 			}
 		}
 	}
-	if( tacTDCDataCounter > 0 )
-		cout << "Found TAC TDC data " << endl;
+//	if( tacTDCDataCounter > 0 )
+//		cout << "Found TAC TDC data " << endl;
 
 
 	if (tacDataCounter < 1) {
@@ -364,7 +372,7 @@ void JEventProcessor_TAC_Monitor::createHistograms() {
 		unsigned trigPattern = 1 << trigBit;
 		if (triggerIsUseful(trigPattern)) {
 			// Create TAC FADc raw data
-			createHisto<TH1D>(trigBit, "TACFADCRAW", "TAC FADC waveform ",
+			createHisto<TH1D>(trigBit, "TACFADCRAW", "Single TAC FADC waveform ",
 					"FlashADC sample number [#]", 100, 0., 100.);
 			// Create TAC summed FADc raw data
 			createHisto<TH1D>(trigBit, "TACFADCRAW_SUM",
