@@ -22,13 +22,12 @@
 #include "TCanvas.h"
 
 #include <JANA/JApplication.h>
-
+#include <DANA/ReadWriteLock.h>
 #include "TRIGGER/DL1Trigger.h"
 #include <DAQ/Df250PulseIntegral.h>
 #include <DAQ/Df250PulseData.h>
 #include <DAQ/Df250WindowRawData.h>
 #include <DAQ/DF1TDCHit.h>
-
 #include <DAQ/DEPICSvalue.h>
 #include <TAC/DTACDigiHit.h>
 #include <TAC/DTACTDCDigiHit.h>
@@ -39,9 +38,6 @@
 #include <TAGGER/DTAGMTDCDigiHit.h>
 #include <TTAB/DTTabUtilities.h>
 
-//#include "libRootSpy/DRootSpy.h"
-
-#include "ReadWriteLock.h"
 #include "JEventProcessor_TAC_Monitor.h"
 
 using namespace jana;
@@ -50,8 +46,11 @@ using namespace std;
 // Routine used to create our JEventProcessor
 extern "C" {
 void InitPlugin(JApplication *app) {
+	cout << "Here I go" << endl;
 	InitJANAPlugin(app);
+	cout << "Plugin initialized" << endl;
 	app->AddProcessor(new JEventProcessor_TAC_Monitor());
+	cout << "Processor added" << endl;
 }
 }
 
@@ -88,9 +87,11 @@ double JEventProcessor_TAC_Monitor::fadc250RawTimeScale = 4.0;
 
 
 jerror_t JEventProcessor_TAC_Monitor::init(void) {
+	cout << "Executing JEventProcessor_TAC_Monitor::init()" << endl;
 	volatile WriteLock rootRWLock(
 			*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
 
+	cout << "lock is taken" << endl;
 	// Create parameters and assign values
 	gPARMS->SetDefaultParameter<string,double>( "TAC:TAGH_FADC_MEAN_TIME", timeCutValue_TAGH );
 	gPARMS->GetParameter( "TAC:TAGH_FADC_MEAN_TIME" )->GetValue( timeCutValue_TAGH );
@@ -99,12 +100,16 @@ jerror_t JEventProcessor_TAC_Monitor::init(void) {
 	gPARMS->SetDefaultParameter<string,unsigned>( "TAC:TAC_FADC_THRESHOLD", tacThreshold );
 	gPARMS->GetParameter( "TAC:TAC_FADC_THRESHOLD" )->GetValue( tacThreshold );
 
+	cout << "Parameters are created " << endl;
+
 	// Create TAC directory and the histograms
 	TDirectory *mainDir = gDirectory;
 	rootDir = gDirectory->mkdir("TAC");
 	rootDir->cd();
 	createHistograms();
 	mainDir->cd();
+
+	cout << "Done executing JEventProcessor_TAC_Monitor::init()"  << endl;
 	return NOERROR;
 }
 
@@ -113,6 +118,12 @@ jerror_t JEventProcessor_TAC_Monitor::brun(jana::JEventLoop* eventLoop,
 	stringstream fileNameStream;
 	fileNameStream << "tac_monitor_" << runnumber << ".root" ;
 	rootFileName = fileNameStream.str();
+
+	stringstream prefixStram ;
+	prefixStram << "tac_monitor_" << runnumber;
+//	dataCompressor = new CompressionTester( prefixStram.str() );
+
+
 	return NOERROR;
 }
 
@@ -202,8 +213,6 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 			}
 		}
 	}
-//	if( tacTDCDataCounter > 0 )
-//		cout << "Found TAC TDC data " << endl;
 
 
 	if (tacDataCounter < 1) {
@@ -256,6 +265,10 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 		histoMap["TACAmpWAVE"][trigBit]->Fill(maxValue);
 		histoMap["TACTimeWAVE"][trigBit]->Fill(tacPeakTime*fadc250RawTimeScale);
 	}
+
+//	if (maxValue > (1 * tacThreshold)) {
+//		dataCompressor->writeData(tacRawData->samples);
+//	}
 
 	// Call methods to fill tagger (TAGH and TAGM) related histograms
 	vector<const DTAGHDigiHit*> taghDigiHitVector;
@@ -348,6 +361,10 @@ jerror_t JEventProcessor_TAC_Monitor::fillTDCHistograms(
 
 jerror_t JEventProcessor_TAC_Monitor::erun(void) {
 	this->writeHistograms();
+	if( dataCompressor != nullptr ) {
+		delete dataCompressor;
+		dataCompressor = nullptr;
+	}
 	return NOERROR;
 }
 
@@ -555,11 +572,10 @@ inline pair<unsigned, unsigned> JEventProcessor_TAC_Monitor::getPeakLocationAndV
 	// Find the maximum by going through the raw data and comparing samples
 	pair<double, double> maxInfo(0, 0);
 	if (tacRawData != nullptr) {
-		maxInfo.first = std::distance(tacRawData->samples.begin(),
-				std::max_element(tacRawData->samples.begin(),
-						tacRawData->samples.end()));
-		maxInfo.second = *std::max_element(tacRawData->samples.begin(),
+		auto maxElement = std::max_element(tacRawData->samples.begin(),
 				tacRawData->samples.end());
+		maxInfo.first = std::distance(tacRawData->samples.begin(), maxElement);
+		maxInfo.second = *maxElement;
 	}
 	return maxInfo;
 }
@@ -611,3 +627,7 @@ jerror_t JEventProcessor_TAC_Monitor::fillTaggerRelatedHistograms(
 	return NOERROR;
 }
 
+jerror_t JEventProcessor_TAC_Monitor::writeRawData( const Df250WindowRawData* tacRawData ) {
+
+	return NOERROR;
+}

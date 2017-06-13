@@ -20,6 +20,7 @@
 #include <DANA/DApplication.h>
 #include "TRIGGER/DL1Trigger.h"
 
+#include "CompressionTester.h"
 
 class JEventProcessor_TAC_Monitor: public jana::JEventProcessor {
 protected:
@@ -33,6 +34,8 @@ protected:
 
 	// ROOT directory pointer
 	TDirectory* rootDir = nullptr;
+
+	CompressionTester* dataCompressor = nullptr;
 
 	// Mask indicating which trigger bits this class cares for.
 	static uint32_t triggerMask;
@@ -108,6 +111,8 @@ protected:
 	// Write histograms into the file
 	virtual jerror_t writeHistograms();
 
+	// Check the file compression by writing out some files.
+	static jerror_t writeRawData( const Df250WindowRawData* tacRawData );
 
 	// Check if the trigger bits for the event are useful
 	static bool triggerIsUseful(const DL1Trigger* trigWords) {
@@ -125,12 +130,13 @@ protected:
 	}
 
 public:
+
 	JEventProcessor_TAC_Monitor(){}
 	virtual ~JEventProcessor_TAC_Monitor(){}
 
-	const char* className(void) {
-		return "JEventProcessor_TAC_Monitor";
-	}
+//	const char* className(void) {
+//		return "JEventProcessor_TAC_Monitor";
+//	}
 
 	static uint32_t getTriggerMask() {
 		return triggerMask;
