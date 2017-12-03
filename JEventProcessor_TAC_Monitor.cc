@@ -361,10 +361,10 @@ jerror_t JEventProcessor_TAC_Monitor::fillTDCHistograms(
 
 jerror_t JEventProcessor_TAC_Monitor::erun(void) {
 	this->writeHistograms();
-	if( dataCompressor != nullptr ) {
-		delete dataCompressor;
-		dataCompressor = nullptr;
-	}
+//	if( dataCompressor != nullptr ) {
+//		delete dataCompressor;
+//		dataCompressor = nullptr;
+//	}
 	return NOERROR;
 }
 

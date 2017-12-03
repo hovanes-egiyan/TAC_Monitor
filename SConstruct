@@ -106,10 +106,14 @@ env.PrependUnique(CPPPATH = ['%s/src' % halld_home, '%s/src/libraries' % halld_h
 env.PrependUnique(CPPPATH = ['%s/%s/include' % (halld_my,osname)])
 env.PrependUnique(CPPPATH = ['%s/%s/include' % (halld_home,osname)])
 
+#env.PrependUnique(CPPPATH = ['/home/hovanes/GlueX/offline/gluex_top/stuff_from_gagik/libcpp'])
+
+
 # Turn on debug symbols and warnings
 env.PrependUnique(      CFLAGS = ['-g', '-fPIC', '-Wall'])
 env.PrependUnique(    CXXFLAGS = ['-g', '-fPIC', '-Wall'])
 env.PrependUnique(FORTRANFLAGS = ['-g', '-fPIC', '-Wall'])
+
 
 # Apply any platform/architecture specific settings
 sbms.ApplyPlatformSpecificSettings(env, arch)
@@ -122,7 +126,10 @@ sbms.AddROOT(env)
 sbms.AddROOTSpyMacros(env, )
 sbms.plugin(env, )
 
+#env.Append(LIBDIR=["/home/hovanes/GlueX/offline/gluex_top/stuff_from_gagik/libcpp/"])
+
 # Make install target
 env.Alias('install', installdir)
 
+#env.Append(LIBDIR=["/home/hovanes/GlueX/offline/gluex_top/stuff_from_gagik/libcpp/"])
 

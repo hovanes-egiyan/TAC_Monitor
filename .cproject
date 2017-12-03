@@ -3,7 +3,16 @@
 	<storageModule moduleId="org.eclipse.cdt.core.settings">
 		<cconfiguration id="cdt.managedbuild.toolchain.gnu.base.13610135">
 			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.toolchain.gnu.base.13610135" moduleId="org.eclipse.cdt.core.settings" name="Default">
-				<externalSettings/>
+				<externalSettings>
+					<externalSetting>
+						<entry flags="RESOLVED" kind="includePath" name="/usr/local/root/6.06.04/include"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="includePath" name="/jana/src/"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="includePath" name="/sim-recon/libraries"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="includePath" name="/RootSpy/src"/>
+						<entry flags="RESOLVED" kind="includePath" name="/home/hovanes/halld_my/include/"/>
+						<entry flags="RESOLVED" kind="macro" name="__GXX_EXPERIMENTAL_CXX0X__" value=""/>
+					</externalSetting>
+				</externalSettings>
 				<extensions>
 					<extension id="org.eclipse.cdt.core.GNU_ELF" point="org.eclipse.cdt.core.BinaryParser"/>
 					<extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
@@ -30,6 +39,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sim-recon/libraries}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RootSpy/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${HOME}/halld_my/include/&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CodeFromGagik/libcpp}&quot;"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.2071836864" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
@@ -92,4 +102,5 @@
 			</target>
 		</buildTargets>
 	</storageModule>
+	<storageModule moduleId="refreshScope"/>
 </cproject>
