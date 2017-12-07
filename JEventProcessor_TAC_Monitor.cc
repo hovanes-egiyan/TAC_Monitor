@@ -182,19 +182,41 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 	vector<const Df250WindowRawData*> rawDataVector;
 	eventLoop->Get(rawDataVector);
 
-	unsigned tacDataCounter = 0;
-	// Pick the TAC raw data
-	const Df250WindowRawData* tacRawData = nullptr;
-	for (auto& rawData : rawDataVector) {
-		if (rawData) {
-			// Hard-coded the location of the TAC FADC signal, pick the TAC raw data
-			if (rawData->rocid == 14 && rawData->slot == 20
-					&& rawData->channel == 0) {
-				tacRawData = rawData;
-				tacDataCounter++;
-			}
-		}
+	// Get rebuild vector and pull out the raw FADC hit from it
+	vector<const DTACHit*> tacRebuildHitVector;
+	eventLoop->Get( tacRebuildHitVector, "REBUILD" );
+
+	if( tacRebuildHitVector.size() < 1  ) {
+//		cout << "Could not find rebuild TAC hits: " << endl;
+		return NOERROR;
 	}
+	set<const Df250WindowRawData*> rawDataSet;
+	set<const JObject*> alreadyChecked;
+	int maxDepth = 3;
+	tacRebuildHitVector[0]->GetAssociatedAncestors(alreadyChecked, maxDepth, rawDataSet);
+
+	unsigned tacDataCounter = rawDataSet.size();
+//	cout << "Found " << rawDataSet.size() << " waveforms " << endl;
+	const Df250WindowRawData* tacRawData = nullptr;
+	if( rawDataSet.size() > 0 ) {
+		tacRawData = *(rawDataSet.begin());
+	} else {
+		return NOERROR;
+	}
+
+//	unsigned tacDataCounter = 0;
+//	// Pick the TAC raw data
+//	const Df250WindowRawData* tacRawData = nullptr;
+//	for (auto& rawData : rawDataVector) {
+//		if (rawData) {
+//			// Hard-coded the location of the TAC FADC signal, pick the TAC raw data
+//			if (rawData->rocid == 14 && rawData->slot == 20
+//					&& rawData->channel == 0) {
+//				tacRawData = rawData;
+//				tacDataCounter++;
+//			}
+//		}
+//	}
 
 	unsigned tacTDCDataCounter = 0;
 	vector<const DCAEN1290TDCHit*> rawTDCDataVector;
@@ -215,9 +237,9 @@ jerror_t JEventProcessor_TAC_Monitor::fillRawDataHistograms(
 	}
 
 
-	if (tacDataCounter < 1) {
-		cout << "Too few TAC raw hits: " << tacDataCounter << endl;
-	}
+//	if (tacDataCounter < 1) {
+//		cout << "Too few TAC raw hits: " << tacDataCounter << endl;
+//	}
 
 	if (tacDataCounter > 1) {
 		cout << "Too many TAC raw hits: " << tacDataCounter << endl;
