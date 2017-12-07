@@ -56,7 +56,7 @@ void InitPlugin(JApplication *app) {
 
 // Mask that specifies the bits of interest for TAC runs
 uint32_t JEventProcessor_TAC_Monitor::triggerMask = 0b00000010;
-// Maximum numbr of trigger bits considered in this plugin
+// Maximum number of trigger bits considered in this plugin
 uint32_t JEventProcessor_TAC_Monitor::numberOfTriggerBits = 16;
 //// Mask that specifies the TAC trigger bit
 //uint32_t JEventProcessor_TAC_Monitor::tacTriggerBit = 1 << 1;
@@ -294,6 +294,7 @@ jerror_t JEventProcessor_TAC_Monitor::fillPulseDataHitograms(
 	// Pick the only peak value from the TACDigiHit object
 	double pulsePeak = 0;
 	double pulseTime = 0;
+	double pulseIntegral = 0;
 	{
 		volatile WriteLock rootRWLock(
 				*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
@@ -303,21 +304,29 @@ jerror_t JEventProcessor_TAC_Monitor::fillPulseDataHitograms(
 	for (auto tacDigiHit : tacDigiHitVector) {
 		if (tacDigiHit) {
 			double currentPeak = double(tacDigiHit->getPulsePeak());
+			double currentIntegral = double(tacDigiHit->getPulseIntegral());
 			if (currentPeak > pulsePeak) {
 				pulsePeak = currentPeak;
 				pulseTime = double(tacDigiHit->getPulseTime())
 						* fadc250DigiTimeScale;
 			}
+			if( currentIntegral > pulseIntegral ) {
+				pulseIntegral = currentIntegral;
+			}
 		}
 	}
 	// Assign larger value when overflow is detected in FADC
-	if (pulsePeak >= maxPulseValue)
+	if (pulsePeak >= maxPulseValue) {
 		pulsePeak = overflowPulseValue;
+		pulseIntegral = overflowPulseValue * 3.0;
+	}
 	{
 		volatile WriteLock rootRWLock(
 				*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
 		histoMap["TACAmpPULSE"][trigBit]->Fill(pulsePeak);
 		histoMap["TACTimePULSE"][trigBit]->Fill(pulseTime);
+		histoMap["TACIntegral"][trigBit]->Fill(pulseIntegral);
+
 	}
 	vector<const DTAGHDigiHit*> taghDigiHitVector;
 	eventLoop->Get(taghDigiHitVector);
@@ -341,16 +350,24 @@ jerror_t JEventProcessor_TAC_Monitor::fillTDCHistograms(
 	vector<const DTACTDCDigiHit*> tacTDCDigiHits;
 	eventLoop->Get(tacTDCDigiHits);
 
+	{
+		volatile WriteLock rootRWLock(
+				*dynamic_cast<DApplication*>(japp)->GetRootReadWriteLock());
+		histoMap["TAC_NTDCHITS"][trigBit]->Fill(tacTDCDigiHits.size());
+	}
+
+
 	const DTTabUtilities* ttabUtilities = nullptr;
 	eventLoop->GetSingle(ttabUtilities);
 
 	for (auto& tacTDCDigiHit : tacTDCDigiHits) {
 		if (tacTDCDigiHit) {
-			const DF1TDCHit* tacF1RawHit = nullptr;
-			tacTDCDigiHit->GetSingleT(tacF1RawHit);
+			const DCAEN1290TDCHit* tacCaenRawHit = nullptr;
+			tacTDCDigiHit->GetSingleT(tacCaenRawHit);
 			if (tacTDCDigiHit) {
-				double tacTDCTime = ttabUtilities->Convert_DigiTimeToNs_F1TDC(
-						tacF1RawHit);
+				double tacTDCTime =
+						ttabUtilities->Convert_DigiTimeToNs_CAEN1290TDC(
+								tacCaenRawHit);
 				histoMap["TAC_TDCTIME"][trigBit]->Fill(double(tacTDCTime));
 			}
 		}
@@ -389,42 +406,55 @@ void JEventProcessor_TAC_Monitor::createHistograms() {
 		unsigned trigPattern = 1 << trigBit;
 		if (triggerIsUseful(trigPattern)) {
 			// Create TAC FADc raw data
-			createHisto<TH1D>(trigBit, "TACFADCRAW", "Single TAC FADC waveform ",
+			createHisto<TH1D>(trigBit, "TACFADCRAW", "Single TAC FADC waveform for Trigger ",
 					"FlashADC sample number [#]", 100, 0., 100.);
 			// Create TAC summed FADc raw data
 			createHisto<TH1D>(trigBit, "TACFADCRAW_SUM",
-					"Summed TAC FADC waveform", "FlashADC sample number [#]",
+					"Summed TAC FADC waveform for Trigger ", "FlashADC sample number [#]",
 					100, 0., 100.);
 			// Create TAC FADc raw data for entries
 			createHisto<TH1D>(trigBit, "TACFADCRAW_ENTRIES",
-					"Entries in TAC FADC waveform bit ",
+					"Entries in TAC FADC waveform for Trigger  ",
 					"FlashADC sample number [#]", 100, 0., 100.);
 			// Create TAC averaged FADc raw data
 			createHisto<TH1D>(trigBit, "TACFADCRAW_AVG",
 					"Averaged TAC FADC waveform", "FlashADC sample number [#]",
 					100, 0., 100.);
 
-			// Create TAC number of hits histogram
+			// Create TAC number of ADC hits histogram
 			createHisto<TH1D>(trigBit, "TAC_NHITS",
-					"Number of hits in TAC", "number of hits from FADC FPGA [#]",
+					"Number of ADC hits in TAC for Trigger ", "number of hits from FADC FPGA [#]",
+					7, 0., 7.);
+
+			// Create TAC number of TDC hits histogram
+			createHisto<TH1D>(trigBit, "TAC_NTDCHITS",
+					"Number of TDC hits in TAC for Trigger ", "number of TDC hits [#]",
 					7, 0., 7.);
 
 			// Create TAC TDC hit time
-			createHisto<TH1D>(trigBit, "TAC_TDCTIME",
-					"TDC time in TAC", "TDC time [ns]",
-					500, 0., 500.);
+			createHisto<TH1D>(trigBit, "TAC_TDCTIME", "TDC time in TAC for Trigger ",
+					"TDC time [ns]", 500, 0., 500.);
+
+
+			// Create TAC TDC hit time minus ADC time
+			createHisto<TH1D>(trigBit, "TAC_TDCADCTIME", "TDC-ADC time in TAC for Trigger ",
+					"TDC-ADC time [ns]", 1000, -500., 500.);
 
 			// Create TAC amplitude histos
 			createHisto<TH1D>(trigBit, "TACAmpPULSE",
-					"TAC Signal Amplitude for Trigger ", "TAC Amplitude", 500,
+					"TAC Largest Signal Amplitude for Trigger ", "TAC Amplitude", 500,
 					0., 5000.);
 			// Create TAC amplitude histos for going through the data and picking the highest bin
 			createHisto<TH1D>(trigBit, "TACAmpWAVE",
 					"TAC Signal Maximum from Raw for Trigger ", "TAC Amplitude",
 					500, 0., 5000.);
+			// Create TAC integral histos from firmware
+			createHisto<TH1D>(trigBit, "TACIntegral",
+					"TAC Largest Signal Integral for Trigger ", "TAC Integral", 1000,
+					0., 14000.);
 			// Create TAC signal time histo
 			createHisto<TH1D>(trigBit, "TACTimePULSE",
-					"TAC Signal time for Trigger ", "FlashADC peak time (ns)",
+					"TAC Signal time from firmware for Trigger ", "FlashADC peak time (ns)",
 					400, 0., 400.);
 			// Create TAC signal time based on raw data histo
 			createHisto<TH1D>(trigBit, "TACTimeWAVE",
@@ -448,21 +478,21 @@ void JEventProcessor_TAC_Monitor::createHistograms() {
 					400, 0., 400.);
 			// Create TAC time vs TAGH FADC time histo
 			createHisto<TH2D>(trigBit, "TACTIMEPULSEvsTAGHTIME",
-					"TAC time vs TAGH time ", "FlashADC peak time for TAGH (ns)", "FlashADC peak time for TAC (ns)",
+					"TAC time vs TAGH time for Trigger ", "FlashADC peak time for TAGH (ns)", "FlashADC peak time for TAC (ns)",
 					400, 0., 400., 400, 0., 400. );
 			createHisto<TH2D>(trigBit, "TACTIMEWAVEvsTAGHTIME",
-					"TAC time vs TAGH time ", "FlashADC peak time for TAGH (ns)", "FlashADC peak time for TAC (ns)",
+					"TAC time vs TAGH time for Trigger ", "FlashADC peak time for TAGH (ns)", "FlashADC peak time for TAC (ns)",
 					400, 0., 400., 400, 0., 400. );
 			// Create TAC amplitude vs TAGH ID histo
 			createHisto<TH2D>(trigBit, "TACAMPPULSEvsTAGHID",
-					"TAC FADC Amplitude vs TAGH ID ", "Tagger Hodoscope Det. Number [#]", "FlashADC peak for TAC",
+					"TAC FADC Amplitude vs TAGH ID for Trigger ", "Tagger Hodoscope Det. Number [#]", "FlashADC peak for TAC",
 					320, 0., 320., 1000, 10., 5000. );
 			createHisto<TH2D>(trigBit, "TACAMPWAVEvsTAGHID",
-					"TAC FADC Amplitude vs TAGH ID ", "Tagger Hodoscope Det. Number [#]", "FlashADC peak for TAC",
+					"TAC FADC Amplitude vs TAGH ID for Trigger ", "Tagger Hodoscope Det. Number [#]", "FlashADC peak for TAC",
 					320, 0., 320., 1000, 10., 5000. );
 			// Create TAGH time vs TAGH ID histo
 			createHisto<TH2D>(trigBit, "TAGHTIMEvsTAGHID",
-					"TAGH Time vs TAGH ID ", "Tagger Hodoscope Det. Number [#]", "TAGH time",
+					"TAGH Time vs TAGH ID for Trigger ", "Tagger Hodoscope Det. Number [#]", "TAGH time",
 					320, 0., 320., 400, 0., 400. );
 
 			// Create TAGM Hits detector ID
@@ -481,21 +511,21 @@ void JEventProcessor_TAC_Monitor::createHistograms() {
 					"TAGM Signal time for Trigger ", "FlashADC peak time (ns)",
 					400, 0., 400.);
 			createHisto<TH2D>(trigBit, "TACTIMEPULSEvsTAGMTIME",
-					"TAC time vs TAGM time ", "FlashADC peak time for TAGM (ns)", "FlashADC peak time for TAC (ns)",
+					"TAC time vs TAGM time for Trigger ", "FlashADC peak time for TAGM (ns)", "FlashADC peak time for TAC (ns)",
 					400, 0., 400., 400, 0., 400. );
 			createHisto<TH2D>(trigBit, "TACTIMEWAVEvsTAGMTIME",
-					"TAC time vs TAGM time ", "FlashADC peak time for TAGM (ns)", "FlashADC peak time for TAC (ns)",
+					"TAC time vs TAGM time for Trigger ", "FlashADC peak time for TAGM (ns)", "FlashADC peak time for TAC (ns)",
 					400, 0., 400., 400, 0., 400. );
 			// Create TAC amplitude vs TAGM ID histo
 			createHisto<TH2D>(trigBit, "TACAMPPULSEvsTAGMID",
-					"TAC FADC Amplitude vs TAGM ID ", "Tagger Microscope Det. Number [#]", "FlashADC peak for TAC",
+					"TAC FADC Amplitude vs TAGM ID for Trigger ", "Tagger Microscope Det. Number [#]", "FlashADC peak for TAC",
 					110, 0., 110., 1000, 10., 5000. );
 			createHisto<TH2D>(trigBit, "TACAMPWAVEvsTAGMID",
-					"TAC FADC Amplitude vs TAGM ID ", "Tagger Microscope Det. Number [#]", "FlashADC peak for TAC",
+					"TAC FADC Amplitude vs TAGM ID for Trigger ", "Tagger Microscope Det. Number [#]", "FlashADC peak for TAC",
 					110, 0., 110., 1000, 10., 5000. );
 			// Create TAGH time vs TAGH ID histo
 			createHisto<TH2D>(trigBit, "TAGMTIMEvsTAGMID",
-					"TAGM Time vs TAGM ID ", "Tagger Microscope Det. Number [#]", "TAGM time",
+					"TAGM Time vs TAGM ID for Trigger ", "Tagger Microscope Det. Number [#]", "TAGM time",
 					110, 0., 110., 400, 0., 400. );
 		}
 	}
