@@ -18,7 +18,8 @@
 
 #include <JANA/JEventProcessor.h>
 #include <DANA/DApplication.h>
-#include "TRIGGER/DL1Trigger.h"
+#include <TRIGGER/DL1Trigger.h>
+#include <DAQ/Df250WindowRawData.h>
 
 #include "CompressionTester.h"
 
